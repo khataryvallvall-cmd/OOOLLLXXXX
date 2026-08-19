@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>غرفة البث — بطاقات الفيديو</title>
+
+<!-- إعدادات تشغيل التطبيق كتطبيق مستقل (PWA) بلا واجهة متصفح -->
+<meta name="theme-color" content="#0F1B1E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="غرفة البث">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0F1B1E;
+    --surface: #16262A;
+    --surface-2: #1E3238;
+    --line: #26393F;
+    --accent: #E8A33D;
+    --accent-dim: #7A5A24;
+    --live: #E4572E;
+    --text: #EAF2F1;
+    --text-dim: #8FA3A3;
+    --good: #5FB89C;
+  }
+
+  *{ box-sizing: border-box; }
+  html,body{ margin:0; padding:0; overscroll-behavior: none; }
+  body{
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(232,163,61,0.07), transparent 60%),
+      radial-gradient(900px 500px at 100% 110%, rgba(95,184,156,0.06), transparent 55%),
+      var(--bg);
+    color: var(--text);
+    font-family: 'Tajawal', 'Segoe UI', Tahoma, sans-serif;
+    min-height: 100vh;
+    padding: 88px 20px 60px;
+    /* منع سلوكيات المتصفح (تحديد نص، نسخ، تكبير باللمس) ليبدو التطبيق أصليًا */
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+  }
+  /* السماح بتحديد النص داخل حقول الإدخال فقط، وإلا لن يعمل اللصق فيها */
+  input, textarea{
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: default;
+  }
+  img, video, iframe{ -webkit-user-drag: none; user-drag: none; }
+
+  .wrap{ max-width: 1080px; margin: 0 auto; }
+
+  .grid{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  @media (max-width: 860px){
+    .grid{ grid-template-columns: 1fr; }
+  }
+
+  .card{
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    display:flex;
+    flex-direction: column;
+    position: relative;
+  }
+
+  .unit{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+
+  /* signature element: signal-strength meter reflecting buffer/connection health */
+  .signal{ display:flex; align-items:flex-end; gap:3px; height:16px; }
+  .signal i{
+    display:block;
+    width:4px;
+    background: var(--line);
+    border-radius: 1px;
+    transition: background .25s ease;
+  }
+  .signal i:nth-child(1){ height:5px; }
+  .signal i:nth-child(2){ height:9px; }
+  .signal i:nth-child(3){ height:13px; }
+  .signal i:nth-child(4){ height:16px; }
+  .signal.lvl-0 i{ background: var(--line); }
+  .signal.lvl-1 i:nth-child(1){ background: var(--live); }
+  .signal.lvl-2 i:nth-child(1),.signal.lvl-2 i:nth-child(2){ background: var(--accent); }
+  .signal.lvl-3 i:nth-child(1),.signal.lvl-3 i:nth-child(2),.signal.lvl-3 i:nth-child(3){ background: var(--accent); }
+  .signal.lvl-4 i{ background: var(--good); }
+
+  .stage{
+    position:relative;
+    width:100%;
+    aspect-ratio: 16/10.5;
+    background: #0B1416;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+  }
+  .stage video, .stage iframe{
+    width:100%; height:100%; border:0; display:block; background:#000;
+    object-fit: cover;
+  }
+
+  .empty{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding: 18px;
+    text-align:center;
+    color: var(--text-dim);
+  }
+  .empty svg{ opacity:.55; }
+  .empty span{ font-size: 12.5px; line-height:1.6; max-width:200px; }
+
+  .bufbar{
+    position:absolute; left:0; right:0; bottom:0;
+    height: 3px;
+    background: rgba(255,255,255,0.06);
+  }
+  .bufbar .fill{
+    height:100%;
+    width:0%;
+    background: linear-gradient(90deg, var(--accent), var(--good));
+    transition: width .3s ease;
+  }
+
+  .row{ display:flex; gap:8px; }
+  input[type="text"]{
+    flex:1;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    border-radius: 7px;
+    padding: 9px 11px;
+    font-family: 'Tajawal', sans-serif;
+    font-size: 13px;
+    outline:none;
+    min-width:0;
+  }
+  input[type="text"]::placeholder{ color: #5A6E70; }
+  input[type="text"]:focus{ border-color: var(--accent); }
+
+  button{
+    font-family:'Tajawal', sans-serif;
+    font-weight:700;
+    font-size: 12.5px;
+    border-radius: 7px;
+    border: none;
+    cursor:pointer;
+    padding: 9px 14px;
+    transition: transform .12s ease, opacity .12s ease;
+  }
+  button:active{ transform: scale(.96); }
+  .btn-primary{ background: var(--accent); color:#20160A; }
+  .btn-primary:hover{ opacity:.92; }
+  .btn-ghost{
+    background: transparent;
+    color: var(--text-dim);
+    border: 1px solid var(--line);
+  }
+  .btn-ghost:hover{ color: var(--text); border-color:#3a5158; }
+
+  .meta-line{
+    font-family:'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    display:flex;
+    justify-content:space-between;
+    padding: 0 2px;
+  }
+
+  .toast{
+    position: fixed;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 12.5px;
+    opacity: 0;
+    transition: all .25s ease;
+    pointer-events:none;
+    z-index: 50;
+  }
+  .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
+  /* ===== شاشة القفل ===== */
+  #lockScreen{
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background:
+      radial-gradient(1200px 600px at 15% -10%, rgba(232,163,61,0.08), transparent 60%),
+      var(--bg);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding: 24px;
+  }
+  #lockScreen.hidden{ display:none; }
+  .lock-box{
+    width:100%;
+    max-width: 320px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap: 14px;
+    text-align:center;
+  }
+  .lock-box.shake{ animation: shakeAnim .4s ease; }
+  @keyframes shakeAnim{
+    10%,90%{ transform:translateX(-3px); }
+    20%,80%{ transform:translateX(5px); }
+    30%,50%,70%{ transform:translateX(-9px); }
+    40%,60%{ transform:translateX(9px); }
+  }
+  .lock-icon{
+    width: 56px; height:56px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--accent);
+  }
+  .lock-icon svg{ width:24px; height:24px; }
+  .lock-title{ font-weight:900; font-size: 17px; }
+  .lock-sub{ color: var(--text-dim); font-size: 12.5px; line-height:1.6; }
+  .lock-error{ color: var(--live); font-size: 12px; min-height: 16px; }
+  .lock-actions{ display:flex; flex-direction:column; gap:8px; width:100%; }
+  .lock-actions button{ width:100%; }
+
+  /* ===== شريط علوي ثابت (يحتضن زر القفل بدل تعويمه فوق البطاقات) ===== */
+  #topBar{
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 56px;
+    display:flex;
+    align-items:center;
+    justify-content: flex-start;
+    padding: 0 18px;
+    background: rgba(15,27,30,0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+    z-index: 45;
+  }
+  .lock-toggle-btn{
+    width: 36px; height:36px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--text-dim);
+    cursor:pointer;
+  }
+  .lock-toggle-btn svg{ width:18px; height:18px; }
+
+  /* ===== لوحة أرقام (PIN) مخصّصة بدل لوحة مفاتيح المتصفح ===== */
+  .pin-dots{
+    direction: ltr;
+    display:flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    justify-content:center;
+    align-items:center;
+    min-height: 34px;
+  }
+  .pin-dot{
+    width: 16px; height:16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--line);
+    background: transparent;
+    transition: all .12s ease;
+  }
+  .pin-dot.masked{ background: var(--accent); border-color: var(--accent); }
+  .pin-dot.visible{
+    width:24px; height:30px;
+    border-radius: 6px;
+    background: var(--surface-2);
+    border-color: var(--line);
+    display:flex; align-items:center; justify-content:center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size: 15px;
+    color: var(--text);
+  }
+  .pin-keypad{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    width:100%;
+    max-width: 250px;
+  }
+  .pin-key{
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size: 18px;
+    display:flex; align-items:center; justify-content:center;
+    padding:0;
+  }
+  .pin-key:active{ background: var(--accent-dim); }
+  .pin-key.pin-key-ghost{
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    font-family: 'Tajawal', sans-serif;
+    font-size: 11.5px;
+    font-weight:700;
+  }
+  .pin-key.pin-key-ghost svg{ width:20px; height:20px; }
+</style>
+</head>
+<body>
+
+<div id="topBar">
+  <button class="lock-toggle-btn" id="lockToggleBtn" title="قفل التطبيق" aria-label="قفل التطبيق">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+  </button>
+</div>
+
+<div id="lockScreen" class="hidden">
+  <div class="lock-box" id="lockBox">
+    <div class="lock-icon" id="lockIcon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>
+    </div>
+    <div class="lock-title" id="lockTitle">تعيين رمز الدخول</div>
+    <div class="lock-sub" id="lockSub">أنشئ رمزًا من الأرقام (4 أرقام على الأقل) لحماية التطبيق</div>
+
+    <div class="pin-dots" id="pinDots"></div>
+    <div class="lock-error" id="lockError"></div>
+
+    <div class="pin-keypad" id="pinKeypad">
+      <button class="pin-key" data-key="1">1</button>
+      <button class="pin-key" data-key="2">2</button>
+      <button class="pin-key" data-key="3">3</button>
+      <button class="pin-key" data-key="4">4</button>
+      <button class="pin-key" data-key="5">5</button>
+      <button class="pin-key" data-key="6">6</button>
+      <button class="pin-key" data-key="7">7</button>
+      <button class="pin-key" data-key="8">8</button>
+      <button class="pin-key" data-key="9">9</button>
+      <button class="pin-key pin-key-ghost" data-key="clear">مسح</button>
+      <button class="pin-key" data-key="0">0</button>
+      <button class="pin-key pin-key-ghost" data-key="back" aria-label="حذف آخر رقم">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="18" y1="9" x2="12" y2="15"></line><line x1="12" y1="9" x2="18" y2="15"></line></svg>
+      </button>
+    </div>
+
+    <div class="lock-actions">
+      <button class="btn-primary" id="lockSubmitBtn">تأكيد</button>
+      <button class="btn-ghost" id="lockResetBtn" style="display:none;">نسيت الرمز؟ إعادة الضبط</button>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <div class="grid" id="grid"></div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+
+
+<script>
+/* ================================================================
+   ضع كل رابط (أو كود iframe كامل كما هو، حتى لو فيه علامات اقتباس)
+   بين علامتي الفصل === في مكانه الصحيح (البطاقة 1 إلى 10)
+   لا تحتاج لوضع أي علامات اقتباس حول الرابط — الصقه كما هو تمامًا
+   اترك المكان فارغًا إذا أردت ترك بطاقة بلا فيديو مؤقتًا
+   ================================================================ */
+const VIDEO_LINKS_RAW = `
+
+===
+
+===
+
+===
+
+===
+
+===
+
+===
+
+===
+
+===
+
+===
+
+`;
+const VIDEO_LINKS = VIDEO_LINKS_RAW.split('===').map(s => s.trim());
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(showToast._h);
+  showToast._h = setTimeout(()=> t.classList.remove('show'), 2200);
+}
+
+function detectType(url){
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if(yt) return { type:'youtube', id: yt[1] };
+  const vm = url.match(/vimeo\.com\/(\d+)/);
+  if(vm) return { type:'vimeo', id: vm[1] };
+  if(/\.(mp4|webm|ogg|mov|m3u8)(\?.*)?$/i.test(url)) return { type:'direct' };
+  // أي رابط آخر (غالبًا صفحة مشغّل وليس ملف فيديو خام) يُعرض كإطار iframe فعلي بدل تحميله كملف فيديو
+  return { type:'embed' };
+}
+
+function buildCardData(rawUrl){
+  let url = (rawUrl || '').trim();
+  if(!url) return { url:null, type:null };
+  // إذا كان الرابط الموضوع في الكود عبارة عن كود iframe كامل، نستخرج الرابط منه تلقائيًا
+  const iframeMatch = url.match(/<iframe[^>]*\ssrc=["']([^"']+)["']/i);
+  if(iframeMatch) url = iframeMatch[1];
+  const info = detectType(url);
+  return { url, type: info.type, refId: info.id || null };
+}
+
+const cards = VIDEO_LINKS.map(buildCardData);
+
+
+function cardTemplate(idx, data){
+  const el = document.createElement('div');
+  el.className = 'unit';
+  el.innerHTML = `
+    <div class="card">
+      <div class="stage" id="stage-${idx}"></div>
+    </div>
+  `;
+  return el;
+}
+
+function renderEmptyStage(idx){
+  const stage = document.getElementById(`stage-${idx}`);
+  stage.innerHTML = `
+    <div class="empty">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#8FA3A3" stroke-width="1.4"><path d="M23 7l-7 5 7 5V7z"></path><rect x="1" y="5" width="15" height="14" rx="2"></rect></svg>
+      <span>لا يوجد فيديو مضاف بعد</span>
+    </div>`;
+}
+
+function setSignal(idx, level){
+  const s = document.getElementById(`signal-${idx}`);
+  if(!s) return;
+  s.className = 'signal lvl-' + level;
+}
+
+function setStatus(idx, text){
+  const el = document.getElementById(`status-${idx}`);
+  if(el) el.textContent = text;
+}
+
+function mountPlayer(idx, data){
+  const stage = document.getElementById(`stage-${idx}`);
+
+  if(data.type === 'youtube'){
+    stage.innerHTML = `<iframe src="https://www.youtube-nocookie.com/embed/${data.refId}?rel=0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`;
+    setSignal(idx, 4);
+    return;
+  }
+  if(data.type === 'vimeo'){
+    stage.innerHTML = `<iframe src="https://player.vimeo.com/video/${data.refId}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`;
+    setSignal(idx, 4);
+    return;
+  }
+
+  if(data.type === 'embed'){
+    stage.innerHTML = `<iframe src="${data.url}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>`;
+    setSignal(idx, 4);
+    return;
+  }
+
+  // رابط مباشر: عرض مباشر من الرابط فقط — بلا أي تنزيل أو تخزين، وبلا أي رسالة فوق مشغل المتصفح
+  stage.innerHTML = `
+    <video id="video-${idx}" preload="auto" controls playsinline></video>
+    <div class="bufbar"><div class="fill" id="fill-${idx}"></div></div>
+  `;
+  attachResilience(idx, data.url);
+}
+
+function attachResilience(idx, url){
+  const video = document.getElementById(`video-${idx}`);
+  const fill = document.getElementById(`fill-${idx}`);
+
+  video.src = url;
+
+  let retries = 0;
+  const MAX_RETRIES = 6;
+  let lastTime = 0;
+  let hasStartedPlayback = false;
+  const MIN_PREBUFFER_SEC = 6; // ثوانٍ من المخزون قبل بدء التشغيل الفعلي
+
+  function bufferedAhead(){
+    if(!video.buffered.length) return 0;
+    try{
+      const end = video.buffered.end(video.buffered.length - 1);
+      return Math.max(0, end - video.currentTime);
+    }catch(e){ return 0; }
+  }
+
+  function updateBufferUI(){
+    const ahead = bufferedAhead();
+    const ratio = Math.min(1, ahead / MIN_PREBUFFER_SEC);
+    fill.style.width = (ratio * 100).toFixed(0) + '%';
+
+    let level = 0;
+    if(ahead > 20) level = 4;
+    else if(ahead > 8) level = 3;
+    else if(ahead > 3) level = 2;
+    else if(ahead > 0) level = 1;
+    setSignal(idx, level);
+    setStatus(idx, ahead > 3 ? 'يعمل بسلاسة' : ahead > 0 ? 'تخزين مؤقت منخفض' : 'ينتظر البيانات');
+  }
+
+  video.addEventListener('progress', updateBufferUI);
+  video.addEventListener('timeupdate', () => { lastTime = video.currentTime; updateBufferUI(); });
+  video.addEventListener('play', () => { hasStartedPlayback = true; retries = 0; });
+  video.addEventListener('waiting', () => setStatus(idx, 'يعيد الملء...'));
+  video.addEventListener('playing', updateBufferUI);
+  video.addEventListener('canplaythrough', updateBufferUI);
+
+  // إعادة المحاولة التلقائية عند انقطاع الاتصال أو خطأ في التحميل — بصمت، دون أي رسالة فوق المشغل
+  video.addEventListener('error', () => {
+    if(retries >= MAX_RETRIES){
+      setStatus(idx, 'تعذّر العرض');
+      setSignal(idx, 0);
+      return;
+    }
+    retries++;
+    setStatus(idx, `إعادة محاولة (${retries}/${MAX_RETRIES})...`);
+    const delay = Math.min(1000 * Math.pow(1.6, retries), 8000); // تراجع تصاعدي
+    setTimeout(() => {
+      const wasPlaying = !video.paused;
+      video.src = url;
+      video.load();
+      video.currentTime = lastTime;
+      if(wasPlaying) video.play().catch(()=>{});
+    }, delay);
+  });
+
+  updateBufferUI();
+}
+
+function render(){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  cards.forEach((data, idx) => {
+    grid.appendChild(cardTemplate(idx, data));
+    if(data.type){
+      mountPlayer(idx, data);
+    } else {
+      renderEmptyStage(idx);
+      setSignal(idx, 0);
+    }
+  });
+}
+
+function startApp(){
+  render();
+}
+// التطبيق يفتح مباشرة على المحتوى دون انتظار أي رمز
+startApp();
+</script>
+
+<script>
+/* ================================================================
+   قفل اختياري بكلمة مرور (يعمل عند الطلب فقط)
+   - التطبيق يفتح مباشرة على المحتوى دون أي انتظار
+   - الضغط على أيقونة القفل: يعرض شاشة إنشاء رمز إن لم يوجد رمز محفوظ،
+     أو يقفل الشاشة فورًا ويطلب الرمز إن كان محفوظًا مسبقًا
+   - الرمز يُحفظ على الجهاز فقط (localStorage) بصيغة مُجزّأة (hash) وليس نصًا صريحًا
+   ================================================================ */
+(function(){
+  const LOCK_KEY = 'vc_app_lock_hash_v1';
+  const MIN_PIN = 4;
+  const MAX_PIN = 8;
+
+  const lockScreen   = document.getElementById('lockScreen');
+  const lockBox      = document.getElementById('lockBox');
+  const lockTitle    = document.getElementById('lockTitle');
+  const lockSub      = document.getElementById('lockSub');
+  const dotsEl       = document.getElementById('pinDots');
+  const errorEl      = document.getElementById('lockError');
+  const submitBtn    = document.getElementById('lockSubmitBtn');
+  const resetBtn     = document.getElementById('lockResetBtn');
+  const toggleBtn    = document.getElementById('lockToggleBtn');
+  const keypad       = document.getElementById('pinKeypad');
+
+  let mode = 'setup'; // 'setup' | 'unlock' — يُحدَّد عند فتح شاشة القفل فقط
+  let stage = 'enter'; // for setup only: 'enter' then 'confirm'
+  let pin = '';
+  let pinConfirm = '';
+
+  async function hash(text){
+    try{
+      const enc = new TextEncoder().encode(text);
+      const buf = await crypto.subtle.digest('SHA-256', enc);
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+    }catch(e){
+      let h = 0;
+      for(let i=0;i<text.length;i++){ h = ((h<<5)-h) + text.charCodeAt(i); h |= 0; }
+      return 'fallback_' + h;
+    }
+  }
+
+  function current(){ return (mode === 'setup' && stage === 'confirm') ? pinConfirm : pin; }
+  function setCurrent(v){
+    if(mode === 'setup' && stage === 'confirm') pinConfirm = v; else pin = v;
+  }
+
+  // أثناء إنشاء الرمز (setup): الأرقام تظهر ظاهرة ليتأكد المستخدم منها قبل الحفظ
+  // أثناء إدخال الرمز لفتح التطبيق (unlock): الأرقام تظهر كنقاط مخفية
+  function renderDots(){
+    const val = current();
+    const showDigits = (mode === 'setup');
+    const slotCount = Math.max(MIN_PIN, val.length);
+    dotsEl.innerHTML = '';
+    for(let i = 0; i < slotCount; i++){
+      const dot = document.createElement('div');
+      const filled = i < val.length;
+      if(showDigits){
+        dot.className = 'pin-dot visible';
+        dot.textContent = filled ? val[i] : '';
+      } else {
+        dot.className = 'pin-dot' + (filled ? ' masked' : '');
+      }
+      dotsEl.appendChild(dot);
+    }
+  }
+
+  function applyMode(){
+    errorEl.textContent = '';
+    pin = '';
+    pinConfirm = '';
+    stage = 'enter';
+    if(mode === 'setup'){
+      lockTitle.textContent = 'تعيين رمز الدخول';
+      lockSub.textContent = 'أنشئ رمزًا من الأرقام (4 أرقام على الأقل) لحماية التطبيق';
+      resetBtn.style.display = 'none';
+    } else {
+      lockTitle.textContent = 'مقفل';
+      lockSub.textContent = 'أدخل رمز الدخول لفتح التطبيق';
+      resetBtn.style.display = 'block';
+    }
+    renderDots();
+  }
+
+  function showError(msg){
+    errorEl.textContent = msg;
+    lockBox.classList.remove('shake');
+    void lockBox.offsetWidth;
+    lockBox.classList.add('shake');
+  }
+
+  // يفتح شاشة القفل: وضع "إنشاء رمز" إن لم يوجد رمز محفوظ، أو "قفل الآن" إن وُجد رمز مسبقًا
+  function openLockScreen(){
+    mode = localStorage.getItem(LOCK_KEY) ? 'unlock' : 'setup';
+    applyMode();
+    lockScreen.classList.remove('hidden');
+  }
+
+  function dismissLockScreen(){
+    lockScreen.classList.add('hidden');
+  }
+
+  async function handleSubmit(){
+    if(mode === 'setup'){
+      if(stage === 'enter'){
+        if(pin.length < MIN_PIN){ showError(`الرمز يجب ألا يقل عن ${MIN_PIN} أرقام`); return; }
+        stage = 'confirm';
+        errorEl.textContent = '';
+        lockTitle.textContent = 'تأكيد الرمز';
+        lockSub.textContent = 'أدخل نفس الرمز مرة أخرى للتأكيد';
+        pinConfirm = '';
+        renderDots();
+        return;
+      }
+      if(pinConfirm.length < MIN_PIN){ showError('أكمل إدخال الرمز'); return; }
+      if(pinConfirm !== pin){
+        showError('الرمزان غير متطابقين، حاول مجددًا');
+        pinConfirm = '';
+        renderDots();
+        return;
+      }
+      localStorage.setItem(LOCK_KEY, await hash(pin));
+      showToast('تم حفظ رمز القفل');
+      dismissLockScreen();
+    } else {
+      if(pin.length < MIN_PIN){ showError('أدخل الرمز كاملًا'); return; }
+      const h = await hash(pin);
+      if(h === localStorage.getItem(LOCK_KEY)){
+        dismissLockScreen();
+      } else {
+        showError('الرمز غير صحيح');
+        pin = '';
+        renderDots();
+      }
+    }
+  }
+
+  keypad.addEventListener('click', (e) => {
+    const btn = e.target.closest('.pin-key');
+    if(!btn) return;
+    const key = btn.dataset.key;
+    let val = current();
+    if(key === 'clear'){
+      val = '';
+    } else if(key === 'back'){
+      val = val.slice(0, -1);
+    } else if(val.length < MAX_PIN){
+      val = val + key;
+    }
+    errorEl.textContent = '';
+    setCurrent(val);
+    renderDots();
+  });
+
+  // دعم لوحة المفاتيح الفعلية (مفيد عند الفتح من كمبيوتر) بجانب اللوحة الرقمية على الشاشة
+  document.addEventListener('keydown', (e) => {
+    if(lockScreen.classList.contains('hidden')) return;
+    if(e.key >= '0' && e.key <= '9'){
+      let val = current();
+      if(val.length < MAX_PIN){ setCurrent(val + e.key); renderDots(); }
+    } else if(e.key === 'Backspace'){
+      setCurrent(current().slice(0, -1)); renderDots();
+    } else if(e.key === 'Enter'){
+      handleSubmit();
+    }
+  });
+
+  submitBtn.addEventListener('click', handleSubmit);
+  resetBtn.addEventListener('click', () => {
+    if(confirm('سيتم حذف الرمز الحالي نهائيًا وستحتاج لإنشاء رمز جديد. هل أنت متأكد؟')){
+      localStorage.removeItem(LOCK_KEY);
+      mode = 'setup';
+      applyMode();
+    }
+  });
+  toggleBtn.addEventListener('click', openLockScreen);
+})();
+</script>
+
+<script>
+/* ================================================================
+   سلوك تطبيق أصلي: منع قائمة النسخ/التحديد الطويل، منع التكبير بالنقر
+   المزدوج، ومنع قائمة السياق — حتى لو أفلت شيء من قواعد CSS
+   ================================================================ */
+document.addEventListener('contextmenu', function(e){ e.preventDefault(); });
+
+document.addEventListener('selectstart', function(e){
+  const tag = e.target.tagName;
+  if(tag !== 'INPUT' && tag !== 'TEXTAREA') e.preventDefault();
+});
+
+document.addEventListener('dragstart', function(e){ e.preventDefault(); });
+
+// منع تكبير الصفحة بالنقر المزدوج/المتكرر السريع على الشاشات اللمسية
+let __lastTouchEnd = 0;
+document.addEventListener('touchend', function(e){
+  const now = Date.now();
+  if(now - __lastTouchEnd <= 300){ e.preventDefault(); }
+  __lastTouchEnd = now;
+}, { passive: false });
+
+// تسجيل service worker لتشغيل التطبيق بدون اتصال وبمظهر تطبيق مستقل (PWA)
+if('serviceWorker' in navigator){
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('service-worker.js').catch(function(){});
+  });
+}
+</script>
+</body>
+</html>
